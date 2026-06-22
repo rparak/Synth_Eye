@@ -33,8 +33,12 @@ import Utilities.General
 from Basler.Camera import Basler_Cls
 #   ../Calibration/Parameters
 from Calibration.Parameters import Basler_Calib_Param_Str
-#   ../Parameters/Scene
-import Parameters.Scene
+# #   ../Parameters/Scene
+# import Parameters.Scene
+#   ../Measurement/Core
+from Measurement.Core import Measure_Object_Cls
+#   ../Measurement/Parameters
+from Measurement.Parameters import Reference_Obj_Dimensions
 
 # ============================================================================
 # Color Constants
@@ -78,8 +82,8 @@ CONST_CONFIG_MODEL_DEFECT = {'Model': 'yolov8m_defect_detection', 'Color': [(80,
 # The boundaries of an object (bounding box) determined using gen_obj_boundaries.py script.
 CONST_OBJECT_BB_AREA = {'Min': 0.1, 'Max': 0.15}
 
-# Locate the path to the project folder.
-project_folder = os.getcwd().split('Synth_Eye')[0] + 'Synth_Eye'
+# Repository root (parent of App/); avoids brittle os.getcwd() + 'Synth_Eye' splits on Synth_Eye_GAN.
+project_folder = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 
 # Detect and assign the training device (GPU if available).
 device_id = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -94,6 +98,14 @@ with open(os.path.join(project_folder, 'Training', 'Args_Model_1.yaml'), 'r') as
 # Load a pre-trained custom YOLO model.
 model_object = YOLO(f"{project_folder}/YOLO/Model/Dataset_v2/{CONST_CONFIG_MODEL_OBJ['Model']}.pt")
 model_defect = YOLO(f"{project_folder}/YOLO/Model/Dataset_v3/{CONST_CONFIG_MODEL_DEFECT['Model']}.pt")
+
+# Custom camera configuration.
+custom_cfg = {
+    'exposure_time': 10000,
+    'gain': 10,
+    'balance_ratios': {'Red': 0.95, 'Green': 0.9, 'Blue': 1.2},
+    'pixel_format': 'BayerRG8'
+}
 
 # ============================================================================
 # Mock Camera Interface (for disabled camera option)
@@ -261,7 +273,7 @@ class ProductivityGraph(QWidget):
         # Draw grid lines
         painter.setPen(QPen(QColor(COLOR_BORDER_GRID), 1))
         for i in range(5):
-            y = graph_y + (graph_height * i / 4)
+            y = int(round(graph_y + (graph_height * i / 4)))
             painter.drawLine(graph_x, y, graph_x + graph_width, y)
 
         # Draw data lines and points
@@ -327,7 +339,9 @@ class SynthEyeApp(QMainWindow):
         # Camera state
         self.camera = MockCamera()
         self.captured_image = None
+        self.measurement_image = None  # Clean pre-annotation image for measurement
         self.analysis_result = None
+        self.detected_object_id = 0    # 0=front, 1=back; updated by ANALYZE
 
         self.Basler_Cam_Id_1 = None
 
@@ -417,12 +431,14 @@ class SynthEyeApp(QMainWindow):
         self.btn_connect = self.create_button("CONNECT", self.on_connect_clicked, COLOR_PRIMARY, button_font_size, screen_height)
         self.btn_capture = self.create_button("CAPTURE", self.on_capture_clicked, COLOR_PRIMARY, button_font_size, screen_height)
         self.btn_analyze = self.create_button("ANALYZE", self.on_analyze_clicked, COLOR_PRIMARY, button_font_size, screen_height)
+        self.btn_measure = self.create_button("MEASURE", self.on_measure_clicked, COLOR_PRIMARY, button_font_size, screen_height)
         self.btn_clear = self.create_button("CLEAR", self.on_clear_clicked, COLOR_PRIMARY, button_font_size, screen_height)
 
         button_layout.addWidget(self.btn_connect)
         button_layout.addStretch()
         button_layout.addWidget(self.btn_capture)
         button_layout.addWidget(self.btn_analyze)
+        button_layout.addWidget(self.btn_measure)
         button_layout.addWidget(self.btn_clear)
 
 
@@ -573,12 +589,14 @@ class SynthEyeApp(QMainWindow):
             self.btn_connect.setEnabled(True)
             self.btn_capture.setEnabled(False)
             self.btn_analyze.setEnabled(False)
+            self.btn_measure.setEnabled(False)
             self.btn_clear.setEnabled(False)
         else:
             # Connected: CONNECT becomes DISCONNECT, CAPTURE and CLEAR enabled
             self.btn_connect.setEnabled(True)
             self.btn_capture.setEnabled(True)
             self.btn_analyze.setEnabled(False)  # Only enabled after capture
+            self.btn_measure.setEnabled(False)  # Only enabled after capture
             self.btn_clear.setEnabled(True)
 
     def on_connect_clicked(self):
@@ -589,7 +607,7 @@ class SynthEyeApp(QMainWindow):
                 self.log(f'Scanning for available camera devices...')
 
                 # Initialize and configure the Basler camera.
-                self.Basler_Cam_Id_1 = Basler_Cls(config=Parameters.Scene.Basler_Cam_Str.Custom_Cfg)
+                self.Basler_Cam_Id_1 = Basler_Cls(config=custom_cfg)
 
                 if self.Basler_Cam_Id_1.camera == None:
                     self.log('Failed to connect to camera. No device detected or connection attempt unsuccessful.')
@@ -648,6 +666,7 @@ class SynthEyeApp(QMainWindow):
 
         self.log('Capture button pressed. Performing camera scan...')
         self.captured_image = img_undistorted.copy()
+        self.measurement_image = img_undistorted.copy()  # Preserve clean image for measurement
 
         # Get actual QLabel size and resize image to match
         label_width = self.camera_view.width()
@@ -668,13 +687,14 @@ class SynthEyeApp(QMainWindow):
         self.camera_view.setPixmap(pixmap)
         self.camera_view.setScaledContents(False)  # Don't scale - image is already at correct size
 
-        # Enable ANALYZE button
+        # Enable ANALYZE and MEASURE buttons
         self.btn_analyze.setEnabled(True)
+        self.btn_measure.setEnabled(True)
         self.log('Image successfully captured with resolution 1920x1200 in RGB format.')
 
     def on_analyze_clicked(self):
         """Handle ANALYZE button click"""
-        if self.captured_image is None:
+        if self.measurement_image is None:
              return
 
         count = self.ok_count + self.nok_count
@@ -682,10 +702,10 @@ class SynthEyeApp(QMainWindow):
         self.log('Analyze button pressed. Performing Synth.Eye AI analysis of the RGB image...')
 
         # Perform prediction of the object on the test image set.
-        results_object = model_object.predict(source=self.captured_image, device=device_id, imgsz=meta_args['imgsz'], conf=0.25, iou=0.5)
+        results_object = model_object.predict(source=self.measurement_image, device=device_id, imgsz=meta_args['imgsz'], conf=0.25, iou=0.5)
 
         # Initialize the variable to hold the processed image.
-        processed_image = self.captured_image.copy()
+        processed_image = self.measurement_image.copy()
 
         # If the model has found an object in the current processed image, express the results (class, bounding box, confidence).
         if results_object[0].boxes.shape[0] >= 1:
@@ -716,7 +736,7 @@ class SynthEyeApp(QMainWindow):
                 processed_image = Utilities.Image_Processing.Draw_Bounding_Box(processed_image, Bounding_Box_Properties, 'YOLO', CONST_CONFIG_MODEL_OBJ['Color'][int(class_id_i)],
                                                                             True, False)
                 # Determine resolution of the processed image.
-                img_h, img_w = self.captured_image.shape[:2]
+                img_h, img_w = self.measurement_image.shape[:2]
                 Resolution = {'x': img_w, 'y': img_h}
 
                 # Converts bounding box coordinates from YOLO format to absolute pixel coordinates.
@@ -731,9 +751,10 @@ class SynthEyeApp(QMainWindow):
                 obj_bottom = int(abs_coordinates_obj['y'] + abs_coordinates_obj['height'] / 2)
 
                 # Crop the object region from the original image.
-                cropped_image = self.captured_image[obj_top:obj_bottom, obj_left:obj_right]
+                cropped_image = self.measurement_image[obj_top:obj_bottom, obj_left:obj_right]
 
                 self.analysis_result = 'OK'
+                self.detected_object_id = int(class_id_i)
 
                 if class_id_i == 0:
                     self.log(f'Detected front side of the metallic object on the image. Confidence: {str(conf_i*100.0)[0:5]} %.')
@@ -787,7 +808,7 @@ class SynthEyeApp(QMainWindow):
 
         if count == (self.ok_count + self.nok_count):
             # Determine resolution of the processed image.
-            img_h, img_w = self.captured_image.shape[:2]
+            img_h, img_w = self.measurement_image.shape[:2]
             Resolution = {'x': img_w, 'y': img_h}
 
             self.log(f'The Synth.Eye AI analysis has been completed, but no object matching the rules was detected.')
@@ -815,6 +836,8 @@ class SynthEyeApp(QMainWindow):
         self.camera_view.setPixmap(pixmap)
         self.camera_view.setScaledContents(False)  # Don't scale - image is already at correct size
 
+        if self.measurement_image is not None:
+            self.btn_measure.setEnabled(True)
         self.btn_analyze.setEnabled(False)
 
         # Update graph
@@ -839,9 +862,74 @@ class SynthEyeApp(QMainWindow):
         self.ok_count = 0
         self.nok_count = 0
 
+        # Reset measurement state
+        self.measurement_image = None
+        self.detected_object_id = 0
+        self.btn_measure.setEnabled(False)
+        self.btn_analyze.setEnabled(False)
+
         # Update display
         self.update_graph_stats()
         self.log('All data successfully cleared.')
+
+    def on_measure_clicked(self):
+        """Handle MEASURE button click — runs object dimension measurement on the captured image"""
+        if self.measurement_image is None:
+            return
+
+        side = 'front' if self.detected_object_id == 0 else 'back'
+        self.log(f'Measure button pressed. Running dimension measurement on {side} side...')
+
+        try:
+            measurement = Measure_Object_Cls(
+                image=self.measurement_image,
+                object_id=self.detected_object_id,
+                ref_obj_dim=Reference_Obj_Dimensions,
+                tolerance=3.0,
+                conversion_factor=Basler_Calib_Param_Str.Conversion_Factor,
+                min_hole_diameter_mm=4.0,
+                max_hole_diameter_mm=15.0
+            )
+
+            status, dimensions, angle, vis_img = measurement.Solve(draw_result=True)
+
+            self.log(f'Measured height of the metallic object: {dimensions.Height:.2f} mm.')
+            self.log(f'Measured width of the metallic object: {dimensions.Width:.2f} mm.')
+            if self.detected_object_id == 0:
+                self.log(f'Measured hole diameter of the front side: {dimensions.Hole_Diameter_Front:.2f} mm.')
+            else:
+                self.log(f'Measured hole diameter of the back side: {dimensions.Hole_Diameter_Back:.2f} mm.')
+            self.log(f'Measured distance between hole centers: {dimensions.Hole_Center_Distance:.2f} mm.')
+            self.log(f'Measured rotation angle of the object: {angle:.1f} deg.')
+            result_str = 'PASS' if status else 'FAIL'
+            tolerance_mm = 3.0
+            if status:
+                self.log(f'Measurement result: {result_str}. All dimensions are within the allowed tolerance of {tolerance_mm} mm.')
+            else:
+                self.log(f'Measurement result: {result_str}. One or more dimensions exceed the allowed tolerance of {tolerance_mm} mm.')
+
+            display_img = vis_img if vis_img is not None else self.measurement_image.copy()
+            self.captured_image = display_img.copy()
+
+            # Display annotated measurement image
+            label_width = self.camera_view.width()
+            label_height = self.camera_view.height()
+            img_resized = cv2.resize(display_img, (label_width, label_height), interpolation=cv2.INTER_LINEAR)
+
+            if len(img_resized.shape) == 2:
+                qimg = QImage(img_resized.data, label_width, label_height, label_width, QImage.Format.Format_Grayscale8)
+            else:
+                img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
+                qimg = QImage(img_rgb.data, label_width, label_height, 3 * label_width, QImage.Format.Format_RGB888)
+
+            self.camera_view.setPixmap(QPixmap.fromImage(qimg))
+            self.camera_view.setScaledContents(False)
+
+        except Exception as e:
+            self.log(f'[ERROR] Measurement failed: {e}')
+
+        self.btn_measure.setEnabled(False)
+        self.btn_analyze.setEnabled(True)
 
     def update_status(self):
         """Update status display"""

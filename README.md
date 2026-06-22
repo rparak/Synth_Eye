@@ -88,6 +88,28 @@ The Synth.Eye application provides a full-screen user interface optimized for 4K
     3. For front-side objects, performs additional defect detection (confidence threshold ≥80%)
     4. Draws bounding boxes and updates statistics (OK/NOK counts)
     5. Updates the productivity graph with new data points
+  - **MEASURE:** Performs precise dimensional measurement of the detected object using computer-vision algorithms. This button is enabled only after a successful **ANALYZE** step and is disabled again once measurement completes. The measurement pipeline:
+    1. Segments the metallic object from the green background using HSV colour thresholding
+    2. Fits a minimum-area rectangle (`cv2.minAreaRect`) to the object contour to measure **Height**, **Width** (in mm), and **rotation angle**
+    3. Detects circular holes and measures their **diameter** and **centre-to-centre distance** in millimetres using the camera calibration conversion factor (~0.098 mm/pixel)
+    4. Compares all values against the reference dimensions (60 × 40 mm body, 6 mm holes, 25 mm hole spacing) within a ±3 mm tolerance and reports **PASS** or **FAIL**
+
+    The hole-detection method is side-specific:
+
+    - **Front side (object_id = 0):** Hough-circle detection on the binary green mask for sub-pixel-accurate circle fitting. An additional counterbore-ring search is performed around each detected inner hole.
+
+<p align="center">
+  <img src=https://github.com/rparak/Synth_Eye/blob/main/images/Image_6.png width="1200">
+</p>
+
+    - **Back side (object_id = 1):** Contour-based detection with `cv2.minEnclosingCircle` and relaxed diameter thresholds to handle partially visible or distorted hole profiles.
+
+<p align="center">
+  <img src=https://github.com/rparak/Synth_Eye/blob/main/images/Image_7.png width="1200">
+</p>
+
+    All measured values are reported in the System Logger. The Camera View is updated with an annotated result image: the bounding rectangle is drawn in **orange** (PASS) or **red** (FAIL).
+
   - **CLEAR:** Resets all application data, including:
     - Productivity graph (removes all data points)
     - System logger (clears all log messages)
@@ -124,10 +146,43 @@ The Synth.Eye application provides a full-screen user interface optimized for 4K
 1. Click **CONNECT** to establish camera connection
 2. Click **CAPTURE** to capture an image from the camera
 3. Click **ANALYZE** to run AI detection and view results with bounding boxes
-4. Review statistics in the productivity graph and logger
-5. Repeat steps 2-4 for additional inspections
-6. Use **CLEAR** to reset all data when starting a new inspection session
-7. Click **DISCONNECT** when finished to release the camera
+4. (Optional) Click **MEASURE** to run dimensional measurement on the detected object and view the annotated result in the Camera View
+5. Review statistics in the productivity graph and logger
+6. Repeat steps 2-5 for additional inspections
+7. Use **CLEAR** to reset all data when starting a new inspection session
+8. Click **DISCONNECT** when finished to release the camera
+
+#### Object Measurement
+
+The inspection workflow follows three sequential steps triggered by dedicated buttons: **CAPTURE** acquires and undistorts a frame from the Basler camera; **ANALYSE** runs YOLO object detection to classify the part's orientation (front or back side); **MEASURE** becomes active after a successful capture or analysis and runs the dimension measurement pipeline (`src/Measurement/Core.py`) on the clean, pre-annotation image.
+
+The pipeline measures five properties of the industrial part and validates them against calibrated reference values:
+
+| Measured dimension | Reference value | Tolerance |
+|--------------------|----------------|-----------|
+| Height | 60.0 mm | ±3.0 mm |
+| Width | 40.0 mm | ±3.0 mm |
+| Hole diameter | 6.0 mm | ±3.0 mm |
+| Hole centre distance | 25.0 mm | ±3.0 mm |
+| Rotation angle | — | — |
+
+The part receives a **PASS** result if all four dimensional checks are within tolerance, or **FAIL** if any one exceeds it. The annotated result image (bounding box in orange for PASS, red for FAIL; hole circles and centre-to-centre line drawn) is displayed in the camera view, and all five measured values are written to the timestamped system logger.
+
+**Front-side measurement** (`Cls_Obj_Front_Side`, `object_id = 0`):
+
+The YOLO object detection model classifies the part as front-side (class 0). The measurement pipeline segments the green background via HSV thresholds, inverts the mask to isolate the part body, then applies **Hough circle detection** on the binary holes mask to locate holes precisely. The measured inner hole diameter is stored as `Hole_Diameter_Front`. An additional pass searches for the outer counterbore ring around each inner hole using radial-gradient scoring.
+
+<p align="center">
+  <img src="images/front_measured.png" alt="Front-side measurement result" width="600">
+</p>
+
+**Back-side measurement** (`Cls_Obj_Back_Side`, `object_id = 1`):
+
+When the part is classified as back-side (class 1), hole detection switches to **contour analysis** (`cv2.minEnclosingCircle`) instead of Hough circles, because back-side holes appear blurrier and less sharply defined. A more lenient diameter filter (0.4×–2.5× the reference diameter) is applied to avoid missed detections. The measured diameter is stored as `Hole_Diameter_Back`.
+
+<p align="center">
+  <img src="images/back_measured.png" alt="Back-side measurement result" width="600">
+</p>
 
 ### How to start training
 
