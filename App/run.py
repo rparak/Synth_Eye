@@ -596,7 +596,7 @@ class SynthEyeApp(QMainWindow):
             self.btn_connect.setEnabled(True)
             self.btn_capture.setEnabled(True)
             self.btn_analyze.setEnabled(False)  # Only enabled after capture
-            self.btn_measure.setEnabled(False)  # Only enabled after capture
+            self.btn_measure.setEnabled(False)  # Only enabled after analyze
             self.btn_clear.setEnabled(True)
 
     def on_connect_clicked(self):
@@ -687,9 +687,8 @@ class SynthEyeApp(QMainWindow):
         self.camera_view.setPixmap(pixmap)
         self.camera_view.setScaledContents(False)  # Don't scale - image is already at correct size
 
-        # Enable ANALYZE and MEASURE buttons
+        # Enable ANALYZE button only — MEASURE requires ANALYZE to be run first
         self.btn_analyze.setEnabled(True)
-        self.btn_measure.setEnabled(True)
         self.log('Image successfully captured with resolution 1920x1200 in RGB format.')
 
     def on_analyze_clicked(self):
@@ -805,6 +804,7 @@ class SynthEyeApp(QMainWindow):
                 else:
                     self.nok_count += 1
                     self.log(f'The result of the Synth.Eye AI analysis is {self.analysis_result}. A defect has been detected.')
+                break
 
         if count == (self.ok_count + self.nok_count):
             # Determine resolution of the processed image.
