@@ -47,7 +47,7 @@ The project was developed as part of **internal research activities at the Resea
 ## Related Projects
 
 - **[Synth.Eye GAN](https://github.com/rparak/Synth_Eye_GAN)** — A data-driven extension of this project that replaces the physics-based Blender rendering pipeline with **generative adversarial networks (StyleGAN2-ADA)**. Instead of virtualizing cameras, lighting, and materials to render synthetic images, Synth.Eye GAN learns the visual distribution of real industrial parts and surface defects directly from data, generating photorealistic images orders of magnitude faster than traditional rendering. It reuses the same YOLO training and PyQt5 inspection workflow as Synth.Eye, making it a drop-in, GPU-accelerated alternative synthetic data source for the same industrial vision pipeline.
-- 
+
 ## Usage
 
 This section provides an overview of how to use **Synth.Eye** for synthetic data generation, dataset preparation, and model training. The platform is designed to support experimentation with vision-based AI pipelines, particularly for **visual inspection and quality control** tasks.
