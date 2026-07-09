@@ -44,10 +44,6 @@ The project was developed as part of **internal research activities at the Resea
 - Compatibility with object detection and vision-based machine learning pipelines.
 - Optimized for efficient dataset generation and experimental workflows.
 
-## Related Projects
-
-- **[Synth.Eye GAN](https://github.com/rparak/Synth_Eye_GAN)** — A data-driven extension of this project that replaces the physics-based Blender rendering pipeline with **generative adversarial networks (StyleGAN2-ADA)**. Instead of virtualizing cameras, lighting, and materials to render synthetic images, Synth.Eye GAN learns the visual distribution of real industrial parts and surface defects directly from data, generating photorealistic images orders of magnitude faster than traditional rendering. It reuses the same YOLO training and PyQt5 inspection workflow as Synth.Eye, making it a drop-in, GPU-accelerated alternative synthetic data source for the same industrial vision pipeline.
-
 ## Usage
 
 This section provides an overview of how to use **Synth.Eye** for synthetic data generation, dataset preparation, and model training. The platform is designed to support experimentation with vision-based AI pipelines, particularly for **visual inspection and quality control** tasks.
@@ -301,6 +297,10 @@ The system is now ready for synthetic data generation, experimentation, and mode
 - Ensure proper handling of label `.txt` files:
   - If a label file already exists for a given index, delete or overwrite it instead of appending new bounding boxes to the existing file.
 
+## Related Projects
+
+- **[Synth.Eye GAN](https://github.com/rparak/Synth_Eye_GAN)** — A data-driven extension of this project that replaces the physics-based Blender rendering pipeline with **generative adversarial networks (StyleGAN2-ADA)**. Instead of virtualizing cameras, lighting, and materials to render synthetic images, Synth.Eye GAN learns the visual distribution of real industrial parts and surface defects directly from data, generating photorealistic images orders of magnitude faster than traditional rendering. It reuses the same YOLO training and PyQt5 inspection workflow as Synth.Eye, making it a drop-in, GPU-accelerated alternative synthetic data source for the same industrial vision pipeline.
+  
 ## Contributors
 
 <table> <tr> <td align="center"> <a href="https://github.com/rparak"> <img src="https://avatars.githubusercontent.com/rparak" width="120px;" alt="Roman Parak"/><br /> <strong>Roman Parak</strong> </a><br /> </td> <td align="center"> <a href="https://github.com/LukasMoravansky"> <img src="https://avatars.githubusercontent.com/LukasMoravansky" width="120px;" alt="Lukas Moravansky"/><br /> <strong>Lukas Moravansky</strong> </a><br /> </td> <td align="center"> <a href="https://github.com/piifl"> <img src="https://avatars.githubusercontent.com/piifl" width="120px;" alt="Filip Rusnak"/><br /> <strong>Filip Rusnak</strong> </a><br /> </td> </tr> </table>
