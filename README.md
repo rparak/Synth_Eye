@@ -33,7 +33,7 @@ The platform follows a data-centric workflow in which synthetic data is used for
 
 By enabling controllable data randomization, rare and edge-case scenario generation, and automated labeling, Synth.Eye significantly reduces the time, cost, and risk associated with real data acquisition. It also mitigates privacy and compliance concerns, making it particularly suitable for industrial AI development in data-constrained environments.
 
-The project was developed as part of **internal research activities at the Research and Innovation Center INTEMAC**, with the goal of empowering next-generation machine vision systems through scalable and realistic synthetic data generation.
+The project was developed as part of **internal research activities at the JIC**, with the goal of empowering next-generation machine vision systems through scalable and realistic synthetic data generation.
 
 ### Features
 
