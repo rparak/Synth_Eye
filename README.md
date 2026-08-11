@@ -313,6 +313,6 @@ You are free to use, modify, distribute, and sublicense this software, provided 
 
 ## Acknowledgements
 
-This project was developed as part of internal research activities at the **Research and Innovation Center INTEMAC**, with a focus on advancing synthetic data generation for **industrial artificial intelligence and machine vision applications**.
+This project was developed as part of internal research activities at the **JIC**, with a focus on advancing synthetic data generation for **industrial artificial intelligence and machine vision applications**.
 
 
