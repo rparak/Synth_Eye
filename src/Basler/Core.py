@@ -47,10 +47,10 @@ class Camera_Cls:
 
         # Default configuration.
         self.default_config = {
-            'exposure_time': 10000,
-            'gain': 10,
-            'balance_ratios': {'Red': 1.5, 'Green': 1.0, 'Blue': 1.0},
-            'pixel_format': 'BayerRG8'
+            'Exposure_Time': 10000,
+            'Gain': 10,
+            'Balance_Ratios': {'Red': 1.5, 'Green': 1.0, 'Blue': 1.0},
+            'Pixel_Format': 'BayerRG8'
         }
 
         # Use user-provided config or fall back to default values.
@@ -113,24 +113,24 @@ class Camera_Cls:
             Apply camera settings from the provided configuration dictionary.
         """
 
-        self.camera.Gain.SetValue(self.config['gain'])
+        self.camera.Gain.SetValue(self.config['Gain'])
         # Disable Auto White Balance.
         self.camera.BalanceWhiteAuto.SetValue('Off')
 
         # Set manual white balance ratios.
-        for color, value in self.config['balance_ratios'].items():
+        for color, value in self.config['Balance_Ratios'].items():
             self.camera.BalanceRatioSelector.SetValue(color)
             self.camera.BalanceRatio.SetValue(value)
 
         # Set Pixel Format.
-        self.camera.PixelFormat.SetValue(self.config['pixel_format'])
+        self.camera.PixelFormat.SetValue(self.config['Pixel_Format'])
 
         # Disable Auto Exposure.
         self.camera.ExposureAuto.SetValue('Off')
 
         # Set the exposure time in microseconds.
-        self.camera.ExposureTime.SetValue(self.config['exposure_time'])
-        print(f'[INFO] Exposure Time set to: {self.config["exposure_time"]} µs')
+        self.camera.ExposureTime.SetValue(self.config['Exposure_Time'])
+        print(f'[INFO] Exposure Time set to: {self.config["Exposure_Time"]} µs')
 
         # The parameter MaxNumBuffer can be used to control the count of buffers
         # allocated for grabbing. The default value of this parameter is 10.
